@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ts from 'typescript';
+import ts, { PropertySignature } from 'typescript';
 
 import {DEFAULT_ARRAY_RANGE, FIXED_ARRAY_COUNT} from '../../lib/constants';
 import {defaultTypeToMock, supportedPrimitiveTypes} from '../../lib/default-type-to-mock';
@@ -58,6 +58,7 @@ type TypeCacheRecord = {
   kind: ts.SyntaxKind,
   aliasedTo: ts.SyntaxKind,
   node: ts.Node,
+	jsDoc: ts.JSDoc[]
 };
 
 type Output = Record<string|number, {}>;
@@ -240,7 +241,11 @@ function processPropertyTypeReference(
             alias === ts.SyntaxKind.NumberKeyword ||
             alias === ts.SyntaxKind.BooleanKeyword;
 
-        if (isPrimitiveType) {
+				// check to see if type has a jsdoc mock type
+		const type = types[normalizedTypeName];
+		if (isAnyJsDocs(type.jsDoc)) {
+			processJsDocs(node as PropertySignature, output, property, type.jsDoc, options);
+		} else if (isPrimitiveType) {
           output[property] = generatePrimitive(property, alias, options, '');
         } else {
           // TODO
@@ -738,6 +743,12 @@ function gatherTypes(sourceFile: ts.SourceFile|ts.ModuleBlock) {
       return;
     }
 
+	let jsDoc: ts.JSDoc[] = [];
+
+	if ((node as NodeWithDocs).jsDoc) {
+		jsDoc = (node as NodeWithDocs).jsDoc;
+	}
+
     let aliasedTo;
 
     if ((node as ts.TypeAliasDeclaration).type) {
@@ -747,9 +758,9 @@ function gatherTypes(sourceFile: ts.SourceFile|ts.ModuleBlock) {
     }
 
     if (modulePrefix) {
-      types[`${modulePrefix}.${text}`] = {kind: node.kind, aliasedTo, node};
+			types[`${modulePrefix}.${text}`] = { kind: node.kind, aliasedTo, node, jsDoc };
     }
-    types[text] = {kind: node.kind, aliasedTo, node};
+		types[text] = { kind: node.kind, aliasedTo, node, jsDoc };
 
     ts.forEachChild(node, processNode);
   };
